@@ -1,0 +1,27 @@
+# Python temporary files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# IDE and System files
+.vscode/
+.idea/
+.gemini/
+.system_generated/
+*.log
+.DS_Store
+Thumbs.db
+
+# Jupyter Notebooks checkpoints
+.ipynb_checkpoints/
+
+# Scratch and test files (optional, remove if you want to push test_predict.py)
+# test_predict.py

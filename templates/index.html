@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GrapeLeaf AI | Deteksi Penyakit Daun Anggur Terpadu</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f8fafc;
+        }
+        .mesh-gradient {
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.05) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.03) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+        .dashboard-panel {
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.02), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
+        }
+        .dashboard-card {
+            background-color: #f8fafc;
+            border: 1px solid #f1f5f9;
+        }
+        .custom-hover:hover {
+            box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.05);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+    </style>
+</head>
+<body class="mesh-gradient min-h-screen text-slate-800 flex flex-col items-center justify-between p-4 md:p-8">
+
+    <!-- Header Section -->
+    <header class="w-full max-w-6xl mb-6 text-center md:text-left flex flex-col md:flex-row items-center justify-between gap-4">
+        <div>
+            <div class="flex items-center justify-center md:justify-start gap-2">
+                <span class="text-3xl">🍇</span>
+                <h1 class="text-3xl font-extrabold tracking-tight text-slate-900">GrapeLeaf AI</h1>
+            </div>
+            <p class="text-xs text-slate-500 mt-1 font-semibold">Sistem Diagnosis Penyakit Daun Anggur Terpadu | MobileViT-S Ensemble</p>
+        </div>
+        <div class="flex items-center gap-2 bg-white border border-slate-200/80 px-4 py-2 rounded-2xl text-xs font-bold text-slate-600 shadow-sm">
+            <span class="relative flex h-2.5 w-2.5">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            Sistem Deteksi Aktif
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="w-full max-w-6xl flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start mb-8">
+        
+        <!-- Left Panel: Input & Control -->
+        <section class="lg:col-span-5 space-y-6 w-full">
+            <div class="dashboard-panel rounded-3xl p-6 md:p-8 space-y-6">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900">Panel Diagnosis</h2>
+                    <p class="text-xs text-slate-500 mt-1">Unggah foto daun tanaman anggur untuk memulai analisis kecerdasan buatan.</p>
+                </div>
+
+                <!-- Dropzone Box -->
+                <div id="drop-zone" class="relative h-72 border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 overflow-hidden bg-slate-50 custom-hover">
+                    <input type="file" id="file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" accept="image/*">
+                    
+                    <!-- Placeholder state -->
+                    <div id="upload-placeholder" class="text-center p-6 space-y-4 pointer-events-none transition-all duration-300">
+                        <div class="w-16 h-16 mx-auto rounded-2xl bg-indigo-500/5 flex items-center justify-center border border-indigo-500/10 text-3xl">
+                            📸
+                        </div>
+                        <div>
+                            <p class="text-sm font-bold text-slate-700">Pilih atau seret foto ke sini</p>
+                            <p class="text-xs text-slate-400 mt-1">Format gambar didukung: JPG, PNG, JPEG</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Preview Image state -->
+                    <div id="preview-container" class="hidden absolute inset-0 w-full h-full z-10 p-3 bg-slate-100/95 flex items-center justify-center">
+                        <img id="preview-img" class="max-h-full max-w-full rounded-lg shadow-md object-contain border border-slate-200" src="" alt="Pratinjau Daun">
+                        <button type="button" id="btn-remove-img" class="absolute top-4 right-4 z-30 bg-slate-900/10 hover:bg-slate-900 hover:text-white text-slate-700 rounded-full p-2 border border-slate-300 transition-all shadow-md hover:scale-105" title="Hapus Gambar">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Control Button -->
+                <button id="btn-predict" class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white font-bold py-3.5 px-6 rounded-2xl transition duration-300 shadow-sm shadow-indigo-100 hover:shadow-indigo-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:-translate-y-0 flex items-center justify-center gap-2 text-sm">
+                    <span>🔍 Mulai Diagnosis</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Right Panel: Diagnostics Dashboard -->
+        <section class="lg:col-span-7 w-full">
+            <div class="dashboard-panel rounded-3xl p-6 md:p-8 min-h-[500px] flex flex-col justify-center relative">
+                
+                <!-- Initial State (Waiting for upload) -->
+                <div id="initial-state" class="text-center py-20 space-y-4">
+                    <div class="w-20 h-20 mx-auto rounded-3xl bg-slate-50 border border-slate-200 flex items-center justify-center text-4xl shadow-sm text-slate-400">
+                        📊
+                    </div>
+                    <div class="max-w-xs mx-auto">
+                        <h3 class="text-sm font-bold text-slate-700">Hasil Diagnosis Daun</h3>
+                        <p class="text-xs text-slate-400 mt-1.5 leading-relaxed">Hasil analisis citra beserta detail persebaran area infeksi akan ditampilkan di panel ini.</p>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div id="loading-state" class="hidden text-center py-24 space-y-4">
+                    <div class="relative w-16 h-16 mx-auto">
+                        <div class="absolute inset-0 rounded-full border-4 border-indigo-100"></div>
+                        <div class="absolute inset-0 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin"></div>
+                    </div>
+                    <p class="text-xs text-indigo-600 font-semibold animate-pulse tracking-wide">Menganalisis dengan MobileViT-S Ensemble...</p>
+                </div>
+
+                <!-- Dashboard Content (Hidden initially) -->
+                <div id="result-container" class="hidden space-y-6">
+                    
+                    <!-- Alert Box untuk Low Confidence / OOD -->
+                    <div id="warning-box" class="hidden bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-2xl flex items-start gap-3">
+                        <span class="text-xl leading-none">⚠️</span>
+                        <div class="space-y-1">
+                            <h4 class="text-xs font-bold text-amber-800">Peringatan Sistem</h4>
+                            <p class="text-xs text-amber-700 leading-relaxed" id="warning-text"></p>
+                        </div>
+                    </div>
+
+                    <!-- Grid Layout for Stats Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        
+                        <!-- Diagnosis Card -->
+                        <div class="dashboard-card rounded-2xl p-5 space-y-3.5">
+                            <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">Kategori Diagnosis</span>
+                            <div class="space-y-2">
+                                <h3 class="text-2xl font-extrabold text-slate-800 tracking-tight" id="result-class">-</h3>
+                                <span class="inline-block px-3 py-1 text-[10px] font-bold rounded-full" id="result-badge">-</span>
+                            </div>
+                            <div class="pt-2.5 border-t border-slate-200/60 flex flex-col gap-1.5">
+                                <span class="text-[10px] text-slate-400 font-bold">Folds Kontributor:</span>
+                                <div id="ensemble-folds" class="flex flex-wrap gap-1"></div>
+                            </div>
+                        </div>
+
+                        <!-- Confidence Score Card -->
+                        <div class="dashboard-card rounded-2xl p-5 space-y-3">
+                            <div class="flex justify-between items-center">
+                                <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400">Tingkat Keyakinan</span>
+                                <span class="text-xl font-bold text-indigo-600" id="result-conf">0%</span>
+                            </div>
+                            <div class="space-y-2">
+                                <div class="w-full bg-slate-200 rounded-full h-3 overflow-hidden border border-slate-100">
+                                    <div id="conf-bar" class="bg-indigo-600 h-full rounded-full transition-all duration-1000" style="width: 0%"></div>
+                                </div>
+                                <p class="text-[10px] text-slate-400 leading-relaxed">Rata-rata probabilitas soft-voting dari seluruh checkpoint Stratified Cross-Validation.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Grad-CAM++ Diagnostic Image -->
+                    <div class="dashboard-card rounded-2xl p-5 space-y-4">
+                        <div>
+                            <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Visualisasi Area Fokus (Grad-CAM++)</h3>
+                            <p class="text-[10px] text-slate-400 mt-1">Peta aktivasi gradien menunjukkan area daun yang paling memengaruhi keputusan model AI.</p>
+                        </div>
+                        <div class="relative w-full flex justify-center bg-slate-100 rounded-xl p-2.5 min-h-[224px] max-h-72 border border-slate-200 overflow-hidden shadow-inner">
+                            <img id="gradcam-img" class="max-h-60 rounded-lg shadow-md object-contain" src="" alt="Grad-CAM++ Heatmap">
+                        </div>
+                    </div>
+
+                    <!-- Probability Chart -->
+                    <div class="dashboard-card rounded-2xl p-5 space-y-4">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Distribusi Probabilitas Kelas</h3>
+                        <div class="relative h-44 w-full">
+                            <canvas id="probChart"></canvas>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer Section -->
+    <footer class="w-full max-w-6xl text-center py-6 border-t border-slate-200 text-[10px] text-slate-400 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <p>&copy; 2026 GrapeLeaf AI | Didukung oleh PyTorch, timm & Flask</p>
+        <div class="flex gap-4">
+            <span>Stratified 5-Fold Cross Validation</span>
+            <span>Soft-Voting Ensemble</span>
+            <span>Grad-CAM++ Explainable AI</span>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const dropZone = document.getElementById('drop-zone');
+        const previewContainer = document.getElementById('preview-container');
+        const previewImg = document.getElementById('preview-img');
+        const btnRemoveImg = document.getElementById('btn-remove-img');
+        const uploadPlaceholder = document.getElementById('upload-placeholder');
+        const btnPredict = document.getElementById('btn-predict');
+        
+        const resultContainer = document.getElementById('result-container');
+        const initialState = document.getElementById('initial-state');
+        const loadingState = document.getElementById('loading-state');
+        
+        let chartInstance = null;
+
+        // Handle File Select
+        fileInput.addEventListener('change', function() {
+            handleFiles(this.files);
+        });
+
+        // Drag & Drop event handlers
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.classList.add('border-indigo-500', 'bg-indigo-50/20');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('border-indigo-500', 'bg-indigo-50/20');
+            });
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            handleFiles(e.dataTransfer.files);
+        });
+
+        function handleFiles(files) {
+            if (files.length > 0) {
+                const file = files[0];
+                if (!file.type.startsWith('image/')) {
+                    alert('Harap unggah file gambar yang valid!');
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImg.src = e.target.result;
+                    previewContainer.classList.remove('hidden');
+                    uploadPlaceholder.classList.add('hidden');
+                    fileInput.files = files; // Sync file input
+                }
+                reader.readAsDataURL(file);
+                
+                // Reset Output Dashboard
+                resultContainer.classList.add('hidden');
+                initialState.classList.remove('hidden');
+                document.getElementById('warning-box').classList.add('hidden');
+            }
+        }
+
+        // Hapus Gambar
+        btnRemoveImg.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            fileInput.value = '';
+            previewContainer.classList.add('hidden');
+            uploadPlaceholder.classList.remove('hidden');
+            previewImg.src = '';
+            
+            // Reset Output Dashboard
+            resultContainer.classList.add('hidden');
+            initialState.classList.remove('hidden');
+            document.getElementById('warning-box').classList.add('hidden');
+        });
+
+        // Predict Click
+        btnPredict.addEventListener('click', async () => {
+            if (!fileInput.files || !fileInput.files[0]) {
+                alert("Pilih atau seret gambar daun terlebih dahulu!");
+                return;
+            }
+
+            // Show Loading UI
+            initialState.classList.add('hidden');
+            resultContainer.classList.add('hidden');
+            loadingState.classList.remove('hidden');
+            btnPredict.disabled = true;
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showResult(data);
+                } else {
+                    alert('Gagal mendiagnosis: ' + (data.error || 'Terjadi kesalahan sistem.'));
+                    initialState.classList.remove('hidden');
+                }
+            } catch (err) {
+                alert('Gagal menghubungi server. Pastikan server Flask berjalan.');
+                initialState.classList.remove('hidden');
+            } finally {
+                loadingState.classList.add('hidden');
+                btnPredict.disabled = false;
+            }
+        });
+
+        function showResult(data) {
+            const warningBox = document.getElementById('warning-box');
+            const warningText = document.getElementById('warning-text');
+            warningBox.classList.add('hidden');
+
+            // Set confidence text & bar
+            document.getElementById('result-conf').innerText = data.confidence;
+            document.getElementById('conf-bar').style.width = data.confidence;
+            
+            // Class display overriding based on OOD (confidence < 60%)
+            let displayClass = data.class;
+            if (data.confidence_score < 0.60) {
+                warningBox.classList.remove('hidden');
+                warningText.innerHTML = `<strong>Peringatan keras:</strong> Citra yang dimasukkan terdeteksi <strong>bukan daun anggur</strong> dari 4 kategori utama (Black Rot, ESCA, Healthy, Leaf Blight) atau berkualitas sangat rendah. Tingkat kepercayaan model hanya ${data.confidence}.`;
+                displayClass = `<span class="text-red-600 font-extrabold">Citra Tidak Dikenal</span>`;
+            } else if (data.confidence_score < 0.70) {
+                warningBox.classList.remove('hidden');
+                warningText.innerHTML = `<strong>Peringatan:</strong> Tingkat kepercayaan prediksi sedang (${data.confidence}). Citra daun mungkin tidak termasuk dalam salah satu dari 4 kategori utama secara jelas, atau kualitas gambar kurang optimal.`;
+                displayClass = `${data.class} <span class="text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-lg ml-2">Kepercayaan Rendah</span>`;
+            }
+            
+            document.getElementById('result-class').innerHTML = displayClass;
+
+            // Set Grad-CAM image
+            const gradcamImg = document.getElementById('gradcam-img');
+            if (data.gradcam) {
+                gradcamImg.src = data.gradcam;
+                gradcamImg.parentElement.parentElement.style.display = 'block';
+            } else {
+                gradcamImg.parentElement.parentElement.style.display = 'none';
+            }
+
+            // Set Ensemble Folds status badges
+            const foldsContainer = document.getElementById('ensemble-folds');
+            foldsContainer.innerHTML = '';
+            if (data.folds_used && data.folds_used.length > 0) {
+                data.folds_used.forEach(fold => {
+                    const foldBadge = document.createElement('span');
+                    foldBadge.className = "px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md border border-indigo-100 text-[10px] font-bold";
+                    foldBadge.innerText = fold;
+                    foldsContainer.appendChild(foldBadge);
+                });
+            } else {
+                const foldBadge = document.createElement('span');
+                foldBadge.className = "px-2 py-0.5 bg-yellow-50 text-yellow-600 rounded-md border border-yellow-100 text-[10px] font-bold";
+                foldBadge.innerText = "Simulation Mode";
+                foldsContainer.appendChild(foldBadge);
+            }
+
+            // Badge Color and Text based on score
+            const badge = document.getElementById('result-badge');
+            if(data.confidence_score > 0.8) {
+                badge.className = "px-3 py-1 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100";
+                badge.innerText = "Sangat Yakin";
+            } else if(data.confidence_score > 0.7) {
+                badge.className = "px-3 py-1 text-[10px] font-bold rounded-full bg-blue-50 text-blue-600 border border-blue-100";
+                badge.innerText = "Yakin";
+            } else if(data.confidence_score >= 0.6) {
+                badge.className = "px-3 py-1 text-[10px] font-bold rounded-full bg-amber-50 text-amber-600 border border-amber-100";
+                badge.innerText = "Kurang Yakin";
+            } else {
+                badge.className = "px-3 py-1 text-[10px] font-bold rounded-full bg-red-50 text-red-600 border border-red-100";
+                badge.innerText = "Tidak Dikenal / Bukan Kategori Utama";
+            }
+
+            // Render ChartJS
+            const ctx = document.getElementById('probChart').getContext('2d');
+            const sorted = Object.entries(data.all_probs).sort((a,b) => b[1] - a[1]);
+            
+            if(chartInstance) chartInstance.destroy();
+            
+            // Safe, accessible corporate palette
+            const barColors = sorted.map(item => {
+                if (item[0] === 'Healthy') return 'rgba(16, 185, 129, 0.8)'; // emerald green
+                if (item[0] === 'Leaf Blight') return 'rgba(245, 158, 11, 0.8)'; // amber
+                if (item[0] === 'ESCA') return 'rgba(239, 68, 68, 0.8)'; // rose red
+                return 'rgba(99, 102, 241, 0.8)'; // indigo for Black Rot
+            });
+
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sorted.map(x => x[0]),
+                    datasets: [{
+                        data: sorted.map(x => x[1] * 100),
+                        backgroundColor: barColors,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: 'rgba(0, 0, 0, 0.05)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#ffffff',
+                            titleColor: '#0f172a',
+                            bodyColor: '#475569',
+                            titleFont: { family: 'Plus Jakarta Sans', size: 11, weight: 'bold' },
+                            bodyFont: { family: 'Plus Jakarta Sans', size: 11 },
+                            borderColor: '#e2e8f0',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    return ` Probabilitas: ${context.raw.toFixed(1)}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { 
+                            beginAtZero: true, 
+                            max: 100,
+                            grid: { color: 'rgba(0, 0, 0, 0.03)' },
+                            ticks: { color: '#64748b', font: { family: 'Plus Jakarta Sans', size: 9 } }
+                        },
+                        x: { 
+                            grid: { display: false },
+                            ticks: { color: '#334155', font: { family: 'Plus Jakarta Sans', size: 10, weight: '600' } }
+                        }
+                    }
+                }
+            });
+
+            // Display result container
+            loadingState.classList.add('hidden');
+            resultContainer.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
