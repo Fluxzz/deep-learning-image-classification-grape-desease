@@ -10,22 +10,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - name: Push to Hugging Face
+      - name: Push to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           git config --global user.email "github-actions@github.com"
           git config --global user.name "GitHub Actions"
 
-          git clone https://user:$HF_TOKEN@huggingface.co/spaces/fluxzz/grape-disease-classification hf_space
+          git clone https://oauth2:$HF_TOKEN@huggingface.co/spaces/fluxzz/grape-disease-classification hf_space
 
-          rsync -av --exclude hf_space . hf_space/
+          rsync -av \
+            --exclude '.git' \
+            --exclude 'hf_space' \
+            . hf_space/
 
           cd hf_space
 
           git add .
-          git commit -m "Auto deploy" || echo "No changes"
 
-          git push
+          git commit -m "Auto deploy from GitHub Actions" || echo "No changes to commit"
+
+          git push origin main
