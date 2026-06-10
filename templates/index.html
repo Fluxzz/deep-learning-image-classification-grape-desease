@@ -44,12 +44,12 @@
             </div>
             <p class="text-xs text-slate-500 mt-1 font-semibold">Sistem Diagnosis Penyakit Daun Anggur Terpadu | MobileViT-S Ensemble</p>
         </div>
-        <div class="flex items-center gap-2 bg-white border border-slate-200/80 px-4 py-2 rounded-2xl text-xs font-bold text-slate-600 shadow-sm">
-            <span class="relative flex h-2.5 w-2.5">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+        <div id="system-status-container" class="flex items-center gap-2 bg-white border border-slate-200/80 px-4 py-2 rounded-2xl text-xs font-bold text-slate-600 shadow-sm transition-all duration-300">
+            <span class="relative flex h-2.5 w-2.5" id="status-ping-container">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-slate-400 opacity-75" id="status-pulse"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-500" id="status-dot"></span>
             </span>
-            Sistem Deteksi Aktif
+            <span id="status-text">Memeriksa Status Model...</span>
         </div>
     </header>
 
@@ -92,6 +92,25 @@
                 <button id="btn-predict" class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white font-bold py-3.5 px-6 rounded-2xl transition duration-300 shadow-sm shadow-indigo-100 hover:shadow-indigo-200 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:-translate-y-0 flex items-center justify-center gap-2 text-sm">
                     <span>🔍 Mulai Diagnosis</span>
                 </button>
+            </div>
+
+            <!-- System Logs Console Card -->
+            <div class="dashboard-panel rounded-3xl p-6 space-y-4">
+                <div class="flex items-center justify-between cursor-pointer select-none" id="btn-toggle-logs">
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg">💻</span>
+                        <h3 class="text-sm font-bold text-slate-900">Konsol Log Pemuatan Model</h3>
+                    </div>
+                    <span id="logs-arrow" class="text-slate-400 text-xs transition-transform duration-300 transform">▲</span>
+                </div>
+                
+                <div id="logs-content" class="transition-all duration-300 overflow-hidden max-h-0">
+                    <div class="bg-slate-950 text-slate-300 font-mono text-[10px] p-4 rounded-xl space-y-1 overflow-y-auto max-h-48 shadow-inner border border-slate-850">
+                        <div id="logs-list" class="space-y-1 leading-relaxed">
+                            <div class="text-slate-500">// Menghubungi server untuk memuat log...</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -442,6 +461,96 @@
             loadingState.classList.add('hidden');
             resultContainer.classList.remove('hidden');
         }
+        async function checkModelStatus() {
+            const statusContainer = document.getElementById('system-status-container');
+            const statusPulse = document.getElementById('status-pulse');
+            const statusDot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+            const logsList = document.getElementById('logs-list');
+            
+            try {
+                const response = await fetch('/status');
+                if (!response.ok) throw new Error('Network response was not ok');
+                const data = await response.json();
+                
+                // Populate Logs
+                if (data.loading_logs && data.loading_logs.length > 0) {
+                    logsList.innerHTML = '';
+                    data.loading_logs.forEach(log => {
+                        const div = document.createElement('div');
+                        if (log.includes('ERROR:')) {
+                            div.className = 'text-rose-400 font-bold';
+                        } else if (log.includes('Warning:') || log.includes('warning:')) {
+                            div.className = 'text-amber-400';
+                        } else if (log.includes('Sukses memuat model fold:') || log.includes('Ensemble model siap') || log.includes('Successfully loaded')) {
+                            div.className = 'text-emerald-400';
+                        } else {
+                            div.className = 'text-slate-350';
+                        }
+                        div.innerText = log;
+                        logsList.appendChild(div);
+                    });
+                } else {
+                    logsList.innerHTML = '<div class="text-slate-500">// Tidak ada log loading model yang terekam.</div>';
+                }
+                
+                if (data.model_loaded) {
+                    const loadedCount = data.total_folds_loaded;
+                    const expectedCount = data.total_folds_expected;
+                    const deviceName = data.device.toUpperCase();
+                    
+                    if (loadedCount === expectedCount) {
+                        // All models loaded successfully
+                        statusPulse.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75";
+                        statusDot.className = "relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500";
+                        statusText.innerText = `${loadedCount}/${expectedCount} Model Fold Aktif (${deviceName})`;
+                    } else {
+                        // Some models loaded, but not all
+                        statusPulse.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75";
+                        statusDot.className = "relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500";
+                        statusText.innerText = `${loadedCount}/${expectedCount} Model Fold Aktif (${deviceName})`;
+                        statusText.className = "text-amber-600 font-bold";
+                        statusContainer.classList.add('border-amber-200', 'bg-amber-50/30');
+                    }
+                } else {
+                    // No models loaded - simulation mode
+                    statusPulse.style.display = 'none';
+                    statusDot.className = "relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500";
+                    statusText.innerText = `Mode Simulasi (Model Gagal Dimuat)`;
+                    statusText.className = "text-rose-600 font-bold";
+                    statusContainer.classList.add('border-rose-200', 'bg-rose-50/30');
+                }
+            } catch (err) {
+                // Server error or unreachable
+                statusPulse.style.display = 'none';
+                statusDot.className = "relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500";
+                statusText.innerText = `Koneksi Terputus`;
+                statusText.className = "text-rose-600 font-bold";
+                statusContainer.classList.add('border-rose-200', 'bg-rose-50/30');
+                
+                logsList.innerHTML = `<div class="text-rose-500 font-bold">[ERROR] Gagal menghubungi server: ${err.message}</div>`;
+            }
+        }
+        
+        // Toggle Logs Console collapse/expand
+        const btnToggleLogs = document.getElementById('btn-toggle-logs');
+        const logsContent = document.getElementById('logs-content');
+        const logsArrow = document.getElementById('logs-arrow');
+        
+        btnToggleLogs.addEventListener('click', () => {
+            if (logsContent.classList.contains('max-h-0')) {
+                logsContent.classList.remove('max-h-0');
+                logsContent.classList.add('max-h-60');
+                logsArrow.classList.add('rotate-180'); // standard Tailwind 180deg rotation
+            } else {
+                logsContent.classList.remove('max-h-60');
+                logsContent.classList.add('max-h-0');
+                logsArrow.classList.remove('rotate-180');
+            }
+        });
+        
+        // Run on page load
+        window.addEventListener('DOMContentLoaded', checkModelStatus);
     </script>
 </body>
 </html>

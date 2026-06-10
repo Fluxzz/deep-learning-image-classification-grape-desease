@@ -33,7 +33,15 @@ transform = transforms.Compose([
 models = {}
 model_loaded = False
 model_error = None
+model_loading_logs = []
 
+def log_load(msg):
+    print(msg)
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    model_loading_logs.append(f"[{timestamp}] {msg}")
+
+log_load(f"Memulai inisialisasi ensemble model pada device: {device}")
 try:
     import timm
     # Find all fold weights in the current directory matching 'best_mobilevit_fold*.pth'
@@ -43,7 +51,7 @@ try:
     checkpoint_paths.sort(key=lambda x: [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', x)])
     
     if len(checkpoint_paths) > 0:
-        print(f"Found {len(checkpoint_paths)} checkpoint folds: {checkpoint_paths}")
+        log_load(f"Menemukan {len(checkpoint_paths)} checkpoint model folds: {checkpoint_paths}")
         for path in checkpoint_paths:
             fold_name = os.path.basename(path).replace('best_mobilevit_fold', 'Fold ').replace('.pth', '')
             try:
@@ -57,7 +65,7 @@ try:
                 if 'head.fc.weight' in state_dict:
                     weight_classes = state_dict['head.fc.weight'].shape[0]
                     if weight_classes != NUM_CLASSES:
-                        print(f"Warning: model classes ({weight_classes}) do not match defined {NUM_CLASSES}. Adjusting...")
+                        log_load(f"Warning: model classes ({weight_classes}) tidak cocok dengan NUM_CLASSES ({NUM_CLASSES}). Menyesuaikan...")
                         model = timm.create_model('mobilevit_s', pretrained=False, num_classes=weight_classes)
                 
                 model.load_state_dict(state_dict)
@@ -65,21 +73,23 @@ try:
                 model.eval()
                 
                 models[fold_name] = model
-                print(f"Successfully loaded model fold: {fold_name} from {path}")
+                log_load(f"Sukses memuat model fold: {fold_name} dari {path}")
             except Exception as fold_err:
-                print(f"Error loading fold model {path}: {fold_err}")
+                log_load(f"Error memuat model fold {path}: {fold_err}")
         
         if len(models) > 0:
             model_loaded = True
+            log_load(f"Ensemble model siap digunakan dengan {len(models)} folds.")
         else:
-            model_error = "Failed to load any of the found checkpoints."
+            model_error = "Gagal memuat seluruh checkpoint folds yang ditemukan."
+            log_load(f"ERROR: {model_error}")
     else:
-        model_error = "No checkpoint files 'best_mobilevit_fold*.pth' found in directory."
-        print(model_error)
+        model_error = "Tidak ada file checkpoint 'best_mobilevit_fold*.pth' yang ditemukan di direktori."
+        log_load(f"ERROR: {model_error}")
 
 except Exception as e:
-    model_error = f"Error during model loading environment setup: {e}"
-    print(model_error)
+    model_error = f"Error saat menyiapkan environment loading model: {e}"
+    log_load(f"ERROR: {model_error}")
 
 
 # Grad-CAM++ implementation
@@ -190,6 +200,23 @@ def simulate_prediction(image):
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+@app.route('/status', methods=['GET'])
+def status():
+    expected_folds = 5
+    loaded_folds = list(models.keys())
+    return jsonify({
+        "success": True,
+        "model_loaded": model_loaded,
+        "model_error": model_error,
+        "device": str(device),
+        "loaded_folds": loaded_folds,
+        "total_folds_expected": expected_folds,
+        "total_folds_loaded": len(loaded_folds),
+        "loading_logs": model_loading_logs
+    })
+
 
 
 @app.route('/predict', methods=['POST'])
