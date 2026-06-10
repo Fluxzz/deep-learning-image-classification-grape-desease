@@ -13,7 +13,7 @@ Aplikasi web ini dapat mendeteksi secara *real-time* 4 kategori utama citra daun
 ## 🌟 Fitur Unggulan & Arsitektur
 
 1.  **Arsitektur MobileViT-S**: Mengintegrasikan kekuatan lokal CNN dengan kemampuan atensi global Vision Transformer (ViT) dalam ukuran yang sangat ringkas dan efisien.
-2.  **Stratified 5-Fold Cross-Validation**: Model dilatih menggunakan pembagian k-fold terlapis guna menjamin kestabilan akurasi di setiap subset data.
+2.  **Stratified 5-Fold Cross-Validation**: Model dilatih menggunakan pembagian k-fold terlapis guna menjamin kestabilan akurasi di setiap subset data. Setiap fold digunakan bergantian sebagai data validasi, sementara 4 fold lain menjadi data pelatihan, sehingga hasil evaluasi lebih tidak bias dan lebih representatif.
 3.  **Ensemble Soft-Voting**: Menggabungkan hasil probabilitas (`softmax`) dari seluruh checkpoint model (Fold 1 s.d. 5) secara dinamis. Hasil rata-rata voting memberikan keputusan diagnosis yang jauh lebih stabil dibandingkan model tunggal.
 4.  **Grad-CAM++ Explainable AI (XAI)**: Menyediakan visualisasi interpretasi keputusan model dengan cara merender peta panas (*heatmap*) daerah atensi di atas citra daun asli. Pengguna dapat melihat dengan tepat bagian mana dari daun yang memicu infeksi penyakit menurut pandangan kecerdasan buatan.
 5.  **Pendeteksi Citra Asing (Out-of-Distribution Filter)**:
@@ -22,14 +22,29 @@ Aplikasi web ini dapat mendeteksi secara *real-time* 4 kategori utama citra daun
 
 ---
 
-## 💻 Tampilan Antarmuka (UI/UX)
+## � Kerangka Evaluasi Model
+
+Model ini dievaluasi menggunakan pendekatan berbasis **stratified 5-fold cross-validation**, yaitu:
+
+- Data dibagi menjadi 5 subset (fold) dengan distribusi kelas yang seimbang.
+- Pada setiap iterasi, 4 fold dipakai untuk training dan 1 fold untuk validation.
+- Proses ini diulang 5 kali sehingga setiap fold pernah menjadi data validasi.
+- Hasil akhir dievaluasi secara rata-rata untuk mendapatkan estimasi performa model yang lebih stabil.
+
+Setelah proses pelatihan, hasil dari kelima checkpoint tersebut digabungkan menggunakan **ensemble soft-voting**. Artinya, probabilitas prediksi dari setiap fold dirata-ratakan sebelum keputusan akhir dibuat. Pendekatan ini membantu mengurangi variansi hasil prediksi antar fold dan meningkatkan keandalan model pada data baru.
+
+---
+
+## �💻 Tampilan Antarmuka (UI/UX)
 Antarmuka web dirancang dengan gaya **Slate & Indigo Light Theme** yang bersih, modern, dan profesional layaknya dashboard SaaS standar industri:
-*   **Panel Kontrol Kiri**: Box drag-and-drop file interaktif dengan fitur hapus/reset instan tanpa memuat ulang halaman.
+*   **Panel Kontrol Kiri**: Tempat pengguna mengunggah gambar daun anggur melalui area drag-and-drop. Panel ini juga menyediakan tombol hapus/reset agar proses pengujian dapat diulang dengan cepat tanpa reload halaman.
 *   **Panel Analisis Kanan**: Dashboard diagnostik terpadu yang menampilkan:
     *   Kategori diagnosis utama lengkap dengan lencana fold kontributor.
-    *   Skor kepercayaan berupa progress bar animasi.
-    *   Visualisasi letak fokus deteksi Grad-CAM++.
-    *   Grafik batang distribusi probabilitas Chart.js ter-kustomisasi warna per kategori penyakit.
+    *   Skor kepercayaan berupa progress bar animasi untuk menunjukkan tingkat keyakinan model.
+    *   Visualisasi letak fokus deteksi Grad-CAM++ sebagai penjelasan area yang paling berpengaruh pada prediksi.
+    *   Grafik batang distribusi probabilitas Chart.js yang menampilkan perbandingan peluang tiap kelas penyakit.
+
+Secara singkat, panel kiri berfungsi untuk input gambar, sedangkan panel kanan berfungsi untuk menampilkan hasil prediksi dan penjelasan model secara visual.
 
 ---
 
