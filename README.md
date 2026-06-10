@@ -56,7 +56,7 @@ Pastikan komputer Anda sudah terinstal Python versi 3.8 ke atas.
 ### 1. Kloning Repository
 ```bash
 git clone https://github.com/USERNAME_ANDA/REPOSTORY_ANDA.git
-cd grapeleaf-ai-web
+cd deep-learning-image-classification-grape-desease
 ```
 
 ### 2. Buat Virtual Environment (Opsional namun Direkomendasikan)
@@ -106,13 +106,20 @@ Buka peramban/browser Anda dan akses alamat:
 
 ## 📂 Struktur Project
 ```text
-my_dl_web/
+deep-learning-image-classification-grape-desease/
+├── .venv/                       # Virtual environment Python (opsional)
 ├── templates/
-│   └── index.html               # Halaman antarmuka dashboard
-├── app.py                       # Server backend Flask (Inference & Grad-CAM++)
-├── requirements.txt             # Daftar dependensi modul python
-├── .gitignore                   # Konfigurasi pengabaian file Git
+│   └── index.html               # Halaman antarmuka dashboard web
+├── app.py                       # Server backend Flask (inference, Grad-CAM++, dll.)
+├── best_mobilevit_fold1.pth     # Weight model fold 1
+├── best_mobilevit_fold2.pth     # Weight model fold 2
+├── best_mobilevit_fold3.pth     # Weight model fold 3
+├── best_mobilevit_fold4.pth     # Weight model fold 4
+├── best_mobilevit_fold5.pth     # Weight model fold 5
+├── Dockerfile                   # Konfigurasi container Docker
+├── LICENSE                      # Lisensi proyek
 ├── README.md                    # Dokumentasi utama project
-├── best_mobilevit_fold1.pth     # Weights model fold 1 (dst.)
-└── test_predict.py              # Skrip integrasi testing backend
+├── requirements.txt             # Daftar dependensi Python
+├── test_predict.py              # Skrip uji prediksi / integrasi backend
+└── __notebook_source__.ipynb    # Notebook sumber eksplorasi/modeling
 ```
