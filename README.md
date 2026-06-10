@@ -55,7 +55,7 @@ Pastikan komputer Anda sudah terinstal Python versi 3.8 ke atas.
 
 ### 1. Kloning Repository
 ```bash
-git clone https://github.com/USERNAME_ANDA/REPOSTORY_ANDA.git
+git clone https://github.com/Fluxzz deep-learning-image-classification-grape-desease.git
 cd deep-learning-image-classification-grape-desease
 ```
 
