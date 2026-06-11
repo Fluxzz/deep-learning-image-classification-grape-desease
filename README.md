@@ -32,8 +32,9 @@ Aplikasi web ini dapat mendeteksi secara *real-time* 4 kategori utama citra daun
 3.  **Ensemble Soft-Voting**: Menggabungkan hasil probabilitas (`softmax`) dari seluruh checkpoint model (Fold 1 s.d. 5) secara dinamis. Hasil rata-rata voting memberikan keputusan diagnosis yang jauh lebih stabil dibandingkan model tunggal.
 4.  **Grad-CAM++ Explainable AI (XAI)**: Menyediakan visualisasi interpretasi keputusan model dengan cara merender peta panas (*heatmap*) daerah atensi di atas citra daun asli. Pengguna dapat melihat dengan tepat bagian mana dari daun yang memicu infeksi penyakit menurut pandangan kecerdasan buatan.
 5.  **Pendeteksi Citra Asing (Out-of-Distribution Filter)**:
-    *   Jika tingkat keyakinan model di bawah **60%**, sistem secara otomatis mengklasifikasikan input sebagai **`Citra Tidak Dikenal`** dan menampilkan peringatan keras (sangat berguna untuk menyaring gambar non-daun anggur, seperti foto orang memancing, benda mati, dll.).
-    *   Jika keyakinan berada di kisaran **60% - 70%**, model memberikan peringatan keyakinan rendah agar pengguna memperhatikan kembali kualitas gambar atau sudut foto.
+    *   Jika tingkat keyakinan model di bawah **60%**, sistem secara otomatis mengklasifikasikan input sebagai **`Citra Tidak Dikenal`** dan menampilkan peringatan keras.
+    *   Jika keyakinan berada di kisaran **60% - 70%**, model memberikan peringatan keyakinan rendah agar pengguna memperhatikan kualitas gambar atau sudut foto.
+    *   Implementasi OOD kini dipantau langsung pada endpoint `/predict` dan hasilnya dikembalikan sebagai bagian dari respons JSON.
 
 ---
 
@@ -66,11 +67,11 @@ Secara singkat, panel kiri berfungsi untuk input gambar, sedangkan panel kanan b
 ## 🚀 Panduan Memulai
 
 ### Prasyarat
-Pastikan komputer Anda sudah terinstal Python versi 3.8 ke atas.
+Pastikan komputer Anda sudah terinstal Python versi 3.10 ke atas.
 
 ### 1. Kloning Repository
 ```bash
-git clone https://github.com/Fluxzz deep-learning-image-classification-grape-desease.git
+git clone https://github.com/Fluxzz/deep-learning-image-classification-grape-desease.git
 cd deep-learning-image-classification-grape-desease
 ```
 
@@ -86,6 +87,7 @@ source venv/bin/activate  # Untuk Linux/macOS
 ```bash
 pip install -r requirements.txt
 ```
+Dependensi sudah ditulis dengan versi minimal yang kompatibel untuk Flask, NumPy, PyTorch, TorchVision, timm, dan `requests` untuk uji endpoint.
 
 ### 4. Taruh File Weights Model
 Pastikan berkas weights model `.pth` hasil training diletakkan di root folder project dengan nama:
@@ -111,11 +113,16 @@ python app.py
     ```
 2.  **Jalankan Docker Container**:
     ```bash
-    docker run -p 5000:5000 grapeleaf-ai-web
+    docker run -p 7860:7860 grapeleaf-ai-web
     ```
 
 Buka peramban/browser Anda dan akses alamat:
-[http://127.0.0.1:5000](http://127.0.0.1:5000)
+[http://127.0.0.1:7860](http://127.0.0.1:7860)
+
+Untuk menguji endpoint prediksi dari terminal, jalankan:
+```bash
+python test_predict.py sample_test.png
+```
 
 ---
 
@@ -136,6 +143,7 @@ deep-learning-image-classification-grape-desease/
 ├── README.md                    # Dokumentasi utama project
 ├── requirements.txt             # Daftar dependensi Python
 ├── test_predict.py              # Skrip uji prediksi / integrasi backend
+├── sample_test.png              # Contoh gambar uji (opsional)
 └── __notebook_source__.ipynb    # Notebook sumber eksplorasi/modeling
 ```
 

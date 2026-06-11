@@ -237,13 +237,18 @@
                     </div>
 
                     <!-- Grad-CAM++ Diagnostic Image -->
-                    <div class="dashboard-card rounded-2xl p-5 space-y-4">
+                    <div id="gradcam-card" class="dashboard-card rounded-2xl p-5 space-y-4">
                         <div>
                             <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Visualisasi Area Fokus (Grad-CAM++)</h3>
                             <p class="text-[10px] text-slate-400 mt-1">Peta aktivasi gradien menunjukkan area daun yang paling memengaruhi keputusan model AI.</p>
                         </div>
-                        <div class="relative w-full flex justify-center bg-slate-100 rounded-xl p-2.5 min-h-[224px] max-h-72 border border-slate-200 overflow-hidden shadow-inner">
+                        <div class="relative w-full flex justify-center bg-slate-100 rounded-xl p-2.5 min-h-[224px] max-h-72 border border-slate-200 overflow-hidden shadow-inner items-center">
                             <img id="gradcam-img" class="max-h-60 rounded-lg shadow-md object-contain" src="" alt="Grad-CAM++ Heatmap">
+                            <div id="gradcam-placeholder" class="hidden text-center p-6 space-y-2">
+                                <span class="text-3xl block">📷</span>
+                                <p class="text-xs text-slate-500 font-semibold">Grad-CAM tidak tersedia dalam Mode Simulasi</p>
+                                <p class="text-[10px] text-slate-400">Unggah model model fold (.pth) untuk mengaktifkan peta atensi real.</p>
+                            </div>
                         </div>
                     </div>
 
@@ -411,11 +416,15 @@
 
             // Set Grad-CAM image
             const gradcamImg = document.getElementById('gradcam-img');
+            const gradcamPlaceholder = document.getElementById('gradcam-placeholder');
             if (data.gradcam) {
                 gradcamImg.src = data.gradcam;
-                gradcamImg.parentElement.parentElement.style.display = 'block';
+                gradcamImg.classList.remove('hidden');
+                gradcamPlaceholder.classList.add('hidden');
             } else {
-                gradcamImg.parentElement.parentElement.style.display = 'none';
+                gradcamImg.src = '';
+                gradcamImg.classList.add('hidden');
+                gradcamPlaceholder.classList.remove('hidden');
             }
 
             // Set Ensemble Folds status badges

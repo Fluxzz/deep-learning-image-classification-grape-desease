@@ -5,11 +5,9 @@ import glob
 import re
 import base64
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torchvision.transforms as transforms
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image
 from flask import Flask, request, jsonify, render_template
 
 app = Flask(__name__)
@@ -21,6 +19,10 @@ print(f"Using device: {device}")
 # Classes definitions
 CLASSES = ['Black Rot', 'ESCA', 'Healthy', 'Leaf Blight']
 NUM_CLASSES = len(CLASSES)
+
+# OOD & Confidence threshold configurations
+OOD_THRESHOLD = 0.60
+LOW_CONFIDENCE_THRESHOLD = 0.70
 
 # Image transform pipeline (MobileViT input: 224x224)
 transform = transforms.Compose([
@@ -34,12 +36,15 @@ models = {}
 model_loaded = False
 model_error = None
 model_loading_logs = []
+MAX_LOADING_LOGS = 100
 
 def log_load(msg):
     print(msg)
     from datetime import datetime
     timestamp = datetime.now().strftime("%H:%M:%S")
     model_loading_logs.append(f"[{timestamp}] {msg}")
+    if len(model_loading_logs) > MAX_LOADING_LOGS:
+        del model_loading_logs[:len(model_loading_logs) - MAX_LOADING_LOGS]
 
 log_load(f"Memulai inisialisasi ensemble model pada device: {device}")
 try:
@@ -58,8 +63,8 @@ try:
                 # Initialize timm mobilevit_s model
                 model = timm.create_model('mobilevit_s', pretrained=False, num_classes=NUM_CLASSES)
                 
-                # Load state dict
-                state_dict = torch.load(path, map_location=device)
+                # Load state dict safely with PyTorch 2.6+ weights_only=True
+                state_dict = torch.load(path, map_location=device, weights_only=True)
                 
                 # Check target classes dynamically from weight shape if mismatch
                 if 'head.fc.weight' in state_dict:
@@ -103,10 +108,9 @@ def generate_gradcam_plusplus(model, input_tensor, original_image, pred_idx):
         # Stages are the feature extractor blocks
         target_layers = [model.stages[-1]]
         
-        cam = GradCAMPlusPlus(model=model, target_layers=target_layers)
-        
-        # Run CAM
-        grayscale_cam = cam(input_tensor=input_tensor, targets=[ClassifierOutputTarget(pred_idx)])[0]
+        with GradCAMPlusPlus(model=model, target_layers=target_layers) as cam:
+            # Run CAM
+            grayscale_cam = cam(input_tensor=input_tensor, targets=[ClassifierOutputTarget(pred_idx)])[0]
         
         # Prepare original image as numpy [0, 1] RGB
         img_resized = original_image.resize((224, 224))
@@ -127,48 +131,35 @@ def generate_gradcam_plusplus(model, input_tensor, original_image, pred_idx):
         return None
 
 # Mock Grad-CAM++ overlay generator for Simulation Mode
+# Kept only as a non-authoritative placeholder to avoid implying real model attention.
 def generate_mock_gradcam(original_image, class_idx):
     try:
         img_resized = original_image.resize((224, 224)).convert('RGB')
-        
-        # Create a radial gradient for mock heatmap
-        mask = Image.new('L', (224, 224), 0)
-        draw = ImageDraw.Draw(mask)
-        
-        # Put focus coordinates depending on the class index to simulate variety
-        focus_centers = [
-            (112, 112),  # center
-            (80, 100),   # upper-left
-            (140, 120),  # lower-right
-            (100, 130)   # lower-left
-        ]
+        img_array = np.asarray(img_resized, dtype=np.float32) / 255.0
+
+        focus_centers = [(112, 112), (80, 100), (140, 120), (100, 130)]
         cx, cy = focus_centers[class_idx % len(focus_centers)]
-        
-        draw.ellipse([cx - 50, cy - 50, cx + 50, cy + 50], fill=255)
-        mask = mask.filter(ImageFilter.GaussianBlur(25))
-        
-        # Apply colormap mapping manually (0->blue, 128->green, 255->red)
-        heatmap = Image.new('RGB', (224, 224))
-        heatmap_pixels = heatmap.load()
-        mask_pixels = mask.load()
-        for y in range(224):
-            for x in range(224):
-                v = mask_pixels[x, y]
-                if v < 128:
-                    r = 0
-                    g = int(v * 2)
-                    b = 255 - int(v * 2)
-                else:
-                    r = int((v - 128) * 2)
-                    g = 255 - int((v - 128) * 2)
-                    b = 0
-                heatmap_pixels[x, y] = (r, g, b)
-                
-        # Blend heatmap with original image
-        blended = Image.blend(img_resized, heatmap, alpha=0.45)
+
+        y, x = np.mgrid[0:224, 0:224]
+        dist = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
+        mask = np.exp(-((dist / 42.0) ** 2))
+        mask = (mask * 255).astype(np.uint8)
+
+        heatmap = np.zeros((224, 224, 3), dtype=np.uint8)
+        low = mask < 128
+        high = ~low
+        heatmap[low, 0] = 0
+        heatmap[low, 1] = (mask[low] * 2).astype(np.uint8)
+        heatmap[low, 2] = (255 - mask[low] * 2).astype(np.uint8)
+        heatmap[high, 0] = ((mask[high] - 128) * 2).astype(np.uint8)
+        heatmap[high, 1] = (255 - (mask[high] - 128) * 2).astype(np.uint8)
+        heatmap[high, 2] = 0
+
+        blended = (img_array * 0.55 + heatmap.astype(np.float32) / 255.0 * 0.45)
+        blended = np.clip(blended * 255.0, 0, 255).astype(np.uint8)
         buffered = io.BytesIO()
-        blended.save(buffered, format="JPEG")
-        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        Image.fromarray(blended).save(buffered, format='JPEG')
+        img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
         return f"data:image/jpeg;base64,{img_str}"
     except Exception as e:
         print(f"Error generating mock Grad-CAM: {e}")
@@ -177,11 +168,11 @@ def generate_mock_gradcam(original_image, class_idx):
 # Simulated prediction generator
 def simulate_prediction(image):
     # Dynamic simulation based on average color of the image
-    img = image.resize((32, 32))
-    pixels = list(img.getdata())
-    avg_r = sum(p[0] for p in pixels) / len(pixels)
-    avg_g = sum(p[1] for p in pixels) / len(pixels)
-    avg_b = sum(p[2] for p in pixels) / len(pixels)
+    img = image.resize((32, 32)).convert('RGB')
+    pixels = np.asarray(img, dtype=np.float32).reshape(-1, 3)
+    avg_r = float(np.mean(pixels[:, 0]))
+    avg_g = float(np.mean(pixels[:, 1]))
+    avg_b = float(np.mean(pixels[:, 2]))
     
     # Generate mock probabilities for each class (Black Rot, ESCA, Healthy, Leaf Blight)
     if avg_r > avg_g and avg_r > avg_b:
@@ -219,17 +210,36 @@ def status():
 
 
 
+def validate_upload_file(file):
+    if file is None or file.filename == '':
+        raise ValueError('Nama file kosong')
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}:
+        raise ValueError('Format file tidak didukung. Gunakan JPG, PNG, JPEG, BMP, atau WEBP.')
+
+    image_bytes = file.read()
+    if not image_bytes or len(image_bytes) == 0:
+        raise ValueError('File gambar kosong.')
+
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as img:
+            img.verify()
+    except Exception as exc:
+        raise ValueError('File bukan gambar yang valid.') from exc
+
+    return image_bytes
+
+
 @app.route('/predict', methods=['POST'])
 def predict():
     if 'file' not in request.files:
         return jsonify({"success": False, "error": "Tidak ada file gambar yang diunggah"}), 400
-        
+
     file = request.files['file']
-    if file.filename == '':
-        return jsonify({"success": False, "error": "Nama file kosong"}), 400
-        
+
     try:
-        image_bytes = file.read()
+        image_bytes = validate_upload_file(file)
         image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
         
         start_time = time.time()
@@ -257,7 +267,6 @@ def predict():
             # Find class index with max probability
             pred_idx = int(avg_probs.argmax())
             confidence_score = float(avg_probs[pred_idx])
-            pred_class = CLASSES[pred_idx] if pred_idx < len(CLASSES) else f"Class {pred_idx}"
             
             # Map all probabilities
             all_probs = {}
@@ -276,13 +285,16 @@ def predict():
             
             pred_idx = sim_probs.index(max(sim_probs))
             confidence_score = sim_probs[pred_idx]
-            pred_class = CLASSES[pred_idx]
             
             all_probs = {CLASSES[i]: float(sim_probs[i]) for i in range(len(CLASSES))}
             
-            # Generate mock Grad-CAM overlay
-            gradcam_b64 = generate_mock_gradcam(image, pred_idx)
+            # Simulation mode intentionally avoids claiming real Grad-CAM output.
+            gradcam_b64 = None
             
+        # Determine OOD and prediction class consistently across both modes
+        is_ood = confidence_score < OOD_THRESHOLD
+        pred_class = 'Citra Tidak Dikenal' if is_ood else (CLASSES[pred_idx] if pred_idx < len(CLASSES) else f"Class {pred_idx}")
+        
         inference_time = (time.time() - start_time) * 1000
         
         return jsonify({
@@ -294,9 +306,12 @@ def predict():
             "gradcam": gradcam_b64,
             "folds_used": folds_used,
             "inference_time": inference_time,
-            "simulated": not model_loaded
+            "simulated": not model_loaded,
+            "is_ood": is_ood
         })
         
+    except ValueError as ve:
+        return jsonify({"success": False, "error": str(ve)}), 400
     except Exception as e:
         import traceback
         traceback.print_exc()
