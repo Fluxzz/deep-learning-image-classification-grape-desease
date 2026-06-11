@@ -61,7 +61,7 @@ try:
             fold_name = os.path.basename(path).replace('best_mobilevit_fold', 'Fold ').replace('.pth', '')
             try:
                 # Initialize timm mobilevit_s model
-                model = timm.create_model('mobilevit_s', pretrained=False, num_classes=NUM_CLASSES)
+                fold_model = timm.create_model('mobilevit_s', pretrained=False, num_classes=NUM_CLASSES)
                 
                 # Load state dict safely with PyTorch 2.6+ weights_only=True
                 state_dict = torch.load(path, map_location=device, weights_only=True)
@@ -71,13 +71,13 @@ try:
                     weight_classes = state_dict['head.fc.weight'].shape[0]
                     if weight_classes != NUM_CLASSES:
                         log_load(f"Warning: model classes ({weight_classes}) tidak cocok dengan NUM_CLASSES ({NUM_CLASSES}). Menyesuaikan...")
-                        model = timm.create_model('mobilevit_s', pretrained=False, num_classes=weight_classes)
+                        fold_model = timm.create_model('mobilevit_s', pretrained=False, num_classes=weight_classes)
                 
-                model.load_state_dict(state_dict)
-                model.to(device)
-                model.eval()
+                fold_model.load_state_dict(state_dict)
+                fold_model.to(device)
+                fold_model.eval()
                 
-                models[fold_name] = model
+                models[fold_name] = fold_model
                 log_load(f"Sukses memuat model fold: {fold_name} dari {path}")
             except Exception as fold_err:
                 log_load(f"Error memuat model fold {path}: {fold_err}")
@@ -254,8 +254,8 @@ def predict():
             # Average probabilities across all fold models (Soft Voting Ensemble)
             outputs_sum = None
             with torch.no_grad():
-                for fold_name, model in models.items():
-                    logits = model(input_tensor)
+                for fold_name, fold_model in models.items():
+                    logits = fold_model(input_tensor)
                     probs = torch.softmax(logits, dim=1)[0]
                     if outputs_sum is None:
                         outputs_sum = probs
@@ -293,6 +293,7 @@ def predict():
             
         # Determine OOD and prediction class consistently across both modes
         is_ood = confidence_score < OOD_THRESHOLD
+        is_low_confidence = confidence_score < LOW_CONFIDENCE_THRESHOLD
         pred_class = 'Citra Tidak Dikenal' if is_ood else (CLASSES[pred_idx] if pred_idx < len(CLASSES) else f"Class {pred_idx}")
         
         inference_time = (time.time() - start_time) * 1000
@@ -307,7 +308,8 @@ def predict():
             "folds_used": folds_used,
             "inference_time": inference_time,
             "simulated": not model_loaded,
-            "is_ood": is_ood
+            "is_ood": is_ood,
+            "is_low_confidence": is_low_confidence
         })
         
     except ValueError as ve:
