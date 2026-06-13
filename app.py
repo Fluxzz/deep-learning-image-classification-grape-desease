@@ -130,41 +130,6 @@ def generate_gradcam_plusplus(model, input_tensor, original_image, pred_idx):
         print(f"Error generating Grad-CAM++: {e}")
         return None
 
-# Mock Grad-CAM++ overlay generator for Simulation Mode
-# Kept only as a non-authoritative placeholder to avoid implying real model attention.
-def generate_mock_gradcam(original_image, class_idx):
-    try:
-        img_resized = original_image.resize((224, 224)).convert('RGB')
-        img_array = np.asarray(img_resized, dtype=np.float32) / 255.0
-
-        focus_centers = [(112, 112), (80, 100), (140, 120), (100, 130)]
-        cx, cy = focus_centers[class_idx % len(focus_centers)]
-
-        y, x = np.mgrid[0:224, 0:224]
-        dist = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
-        mask = np.exp(-((dist / 42.0) ** 2))
-        mask = (mask * 255).astype(np.uint8)
-
-        heatmap = np.zeros((224, 224, 3), dtype=np.uint8)
-        low = mask < 128
-        high = ~low
-        heatmap[low, 0] = 0
-        heatmap[low, 1] = (mask[low] * 2).astype(np.uint8)
-        heatmap[low, 2] = (255 - mask[low] * 2).astype(np.uint8)
-        heatmap[high, 0] = ((mask[high] - 128) * 2).astype(np.uint8)
-        heatmap[high, 1] = (255 - (mask[high] - 128) * 2).astype(np.uint8)
-        heatmap[high, 2] = 0
-
-        blended = (img_array * 0.55 + heatmap.astype(np.float32) / 255.0 * 0.45)
-        blended = np.clip(blended * 255.0, 0, 255).astype(np.uint8)
-        buffered = io.BytesIO()
-        Image.fromarray(blended).save(buffered, format='JPEG')
-        img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
-        return f"data:image/jpeg;base64,{img_str}"
-    except Exception as e:
-        print(f"Error generating mock Grad-CAM: {e}")
-        return None
-
 # Simulated prediction generator
 def simulate_prediction(image):
     # Dynamic simulation based on average color of the image
