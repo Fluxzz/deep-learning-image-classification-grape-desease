@@ -193,6 +193,58 @@
                     <p class="text-xs text-indigo-600 font-semibold animate-pulse tracking-wide">Menganalisis dengan MobileViT-S Ensemble...</p>
                 </div>
 
+                <!-- OOD State (Hidden initially) -->
+                <div id="ood-state" class="hidden space-y-6">
+                    <div class="text-center space-y-4 py-6">
+                        <div class="w-20 h-20 mx-auto rounded-3xl bg-rose-50 border border-rose-100 flex items-center justify-center text-4xl shadow-md text-rose-500 animate-pulse">
+                            🚨
+                        </div>
+                        <div class="space-y-1">
+                            <h3 class="text-xl font-extrabold text-rose-600 tracking-tight">Citra Tidak Dikenal (OOD)</h3>
+                            <p class="text-xs text-slate-500">Tingkat keyakinan model terhadap daun anggur di bawah ambang batas minimum.</p>
+                        </div>
+                    </div>
+
+                    <div class="rounded-3xl border border-rose-100 bg-rose-50/60 p-5 space-y-4 shadow-sm">
+                        <div class="flex gap-3 items-start">
+                            <span class="text-lg">⚠️</span>
+                            <div class="space-y-1">
+                                <h4 class="text-xs font-bold text-rose-800">Peringatan Diagnosis</h4>
+                                <p class="text-xs text-rose-700 leading-relaxed">
+                                    Sistem mendeteksi bahwa gambar yang Anda masukkan <strong>bukan merupakan daun anggur</strong> yang valid atau tidak termasuk dalam 4 kategori penyakit utama (Black Rot, ESCA, Healthy, Leaf Blight). 
+                                    Oleh karena itu, sistem <strong>tidak melakukan prediksi penyakit</strong> pada gambar ini demi menjaga akurasi hasil diagnosis.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-3xl border border-slate-205 bg-white/70 p-5 space-y-3 shadow-inner">
+                        <span class="text-xs font-bold text-slate-800 flex items-center gap-2">
+                            📝 <span>Panduan Penggunaan Kembali:</span>
+                        </span>
+                        <ul class="text-[11px] text-slate-600 space-y-2 list-none pl-1">
+                            <li class="flex items-start gap-2">
+                                <span class="text-emerald-500 font-bold">✓</span>
+                                <span>Pastikan gambar berupa selembar <strong>daun anggur</strong> yang terlihat jelas dan mendominasi frame.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-emerald-500 font-bold">✓</span>
+                                <span>Gunakan pencahayaan yang cukup, gambar tajam, dan tidak buram/kabur.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-rose-500 font-bold">✗</span>
+                                <span>Hindari memasukkan gambar objek lain (hewan, benda mati, pemandangan, dll.).</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="text-center pt-2">
+                        <p class="text-[11px] text-slate-400 font-medium">
+                            Silakan lakukan input gambar ulang pada panel di sebelah kiri sesuai ketentuan.
+                        </p>
+                    </div>
+                </div>
+
                 <!-- Dashboard Content (Hidden initially) -->
                 <div id="result-container" class="hidden space-y-6">
                     
@@ -286,6 +338,7 @@
         const btnPredict = document.getElementById('btn-predict');
         
         const resultContainer = document.getElementById('result-container');
+        const oodState = document.getElementById('ood-state');
         const initialState = document.getElementById('initial-state');
         const loadingState = document.getElementById('loading-state');
         
@@ -333,6 +386,7 @@
                 
                 // Reset Output Dashboard
                 resultContainer.classList.add('hidden');
+                oodState.classList.add('hidden');
                 initialState.classList.remove('hidden');
                 document.getElementById('warning-box').classList.add('hidden');
             }
@@ -349,6 +403,7 @@
             
             // Reset Output Dashboard
             resultContainer.classList.add('hidden');
+            oodState.classList.add('hidden');
             initialState.classList.remove('hidden');
             document.getElementById('warning-box').classList.add('hidden');
         });
@@ -363,6 +418,7 @@
             // Show Loading UI
             initialState.classList.add('hidden');
             resultContainer.classList.add('hidden');
+            oodState.classList.add('hidden');
             loadingState.classList.remove('hidden');
             btnPredict.disabled = true;
 
@@ -396,134 +452,138 @@
             const warningText = document.getElementById('warning-text');
             warningBox.classList.add('hidden');
 
-            // Set confidence text & bar
-            document.getElementById('result-conf').innerText = data.confidence;
-            document.getElementById('conf-bar').style.width = data.confidence;
-            
-            // Class display overriding based on OOD / Low Confidence
-            let displayClass = data.class;
+            loadingState.classList.add('hidden');
+
             if (data.is_ood) {
-                warningBox.classList.remove('hidden');
-                warningText.innerHTML = `<strong>Peringatan keras:</strong> Citra yang dimasukkan terdeteksi <strong>bukan daun anggur</strong> dari 4 kategori utama (Black Rot, ESCA, Healthy, Leaf Blight) atau berkualitas sangat rendah. Tingkat kepercayaan model hanya ${data.confidence}.`;
-                displayClass = `<span class="text-red-600 font-extrabold">Citra Tidak Dikenal</span>`;
-            } else if (data.is_low_confidence) {
-                warningBox.classList.remove('hidden');
-                warningText.innerHTML = `<strong>Peringatan:</strong> Tingkat kepercayaan prediksi sedang (${data.confidence}). Citra daun mungkin tidak termasuk dalam salah satu dari 4 kategori utama secara jelas, atau kualitas gambar kurang optimal.`;
-                displayClass = `${data.class} <span class="text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-lg ml-2">Kepercayaan Rendah</span>`;
-            }
-            
-            document.getElementById('result-class').innerHTML = displayClass;
-
-            // Set Grad-CAM image
-            const gradcamImg = document.getElementById('gradcam-img');
-            const gradcamPlaceholder = document.getElementById('gradcam-placeholder');
-            if (data.gradcam) {
-                gradcamImg.src = data.gradcam;
-                gradcamImg.classList.remove('hidden');
-                gradcamPlaceholder.classList.add('hidden');
+                // Sembunyikan dashboard hasil normal dan tampilkan layar peringatan OOD
+                resultContainer.classList.add('hidden');
+                oodState.classList.remove('hidden');
             } else {
-                gradcamImg.src = '';
-                gradcamImg.classList.add('hidden');
-                gradcamPlaceholder.classList.remove('hidden');
-            }
+                // Sembunyikan layar peringatan OOD dan tampilkan dashboard hasil normal
+                oodState.classList.add('hidden');
+                resultContainer.classList.remove('hidden');
 
-            // Set Ensemble Folds status badges
-            const foldsContainer = document.getElementById('ensemble-folds');
-            foldsContainer.innerHTML = '';
-            if (data.folds_used && data.folds_used.length > 0) {
-                data.folds_used.forEach(fold => {
+                // Set confidence text & bar
+                document.getElementById('result-conf').innerText = data.confidence;
+                document.getElementById('conf-bar').style.width = data.confidence;
+                
+                // Class display overriding based on Low Confidence
+                let displayClass = data.class;
+                if (data.is_low_confidence) {
+                    warningBox.classList.remove('hidden');
+                    warningText.innerHTML = `<strong>Peringatan:</strong> Tingkat kepercayaan prediksi sedang (${data.confidence}). Citra daun mungkin tidak termasuk dalam salah satu dari 4 kategori utama secara jelas, atau kualitas gambar kurang optimal.`;
+                    displayClass = `${data.class} <span class="text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-lg ml-2">Kepercayaan Rendah</span>`;
+                }
+                
+                document.getElementById('result-class').innerHTML = displayClass;
+
+                // Set Grad-CAM image
+                const gradcamImg = document.getElementById('gradcam-img');
+                const gradcamPlaceholder = document.getElementById('gradcam-placeholder');
+                if (data.gradcam) {
+                    gradcamImg.src = data.gradcam;
+                    gradcamImg.classList.remove('hidden');
+                    gradcamPlaceholder.classList.add('hidden');
+                } else {
+                    gradcamImg.src = '';
+                    gradcamImg.classList.add('hidden');
+                    gradcamPlaceholder.classList.remove('hidden');
+                }
+
+                // Set Ensemble Folds status badges
+                const foldsContainer = document.getElementById('ensemble-folds');
+                foldsContainer.innerHTML = '';
+                if (data.folds_used && data.folds_used.length > 0) {
+                    data.folds_used.forEach(fold => {
+                        const foldBadge = document.createElement('span');
+                        foldBadge.className = "px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md border border-indigo-100 text-[10px] font-bold";
+                        foldBadge.innerText = fold;
+                        foldsContainer.appendChild(foldBadge);
+                    });
+                } else {
                     const foldBadge = document.createElement('span');
-                    foldBadge.className = "px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md border border-indigo-100 text-[10px] font-bold";
-                    foldBadge.innerText = fold;
+                    foldBadge.className = "px-2 py-0.5 bg-yellow-50 text-yellow-600 rounded-md border border-yellow-100 text-[10px] font-bold";
+                    foldBadge.innerText = "Simulation Mode";
                     foldsContainer.appendChild(foldBadge);
+                }
+
+                // Badge Color and Text based on score
+                const badge = document.getElementById('result-badge');
+                if(data.confidence_score > 0.8) {
+                    badge.className = "px-3 py-1 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100";
+                    badge.innerText = "Sangat Yakin";
+                } else if(data.confidence_score > 0.7) {
+                    badge.className = "px-3 py-1 text-[10px] font-bold rounded-full bg-blue-50 text-blue-600 border border-blue-100";
+                    badge.innerText = "Yakin";
+                } else if(data.confidence_score >= 0.6) {
+                    badge.className = "px-3 py-1 text-[10px] font-bold rounded-full bg-amber-50 text-amber-600 border border-amber-100";
+                    badge.innerText = "Kurang Yakin";
+                } else {
+                    badge.className = "px-3 py-1 text-[10px] font-bold rounded-full bg-red-50 text-red-600 border border-red-100";
+                    badge.innerText = "Tidak Dikenal / Bukan Kategori Utama";
+                }
+
+                // Render ChartJS
+                const ctx = document.getElementById('probChart').getContext('2d');
+                const sorted = Object.entries(data.all_probs).sort((a,b) => b[1] - a[1]);
+                
+                if(chartInstance) chartInstance.destroy();
+                
+                // Safe, accessible corporate palette
+                const barColors = sorted.map(item => {
+                    if (item[0] === 'Healthy') return 'rgba(16, 185, 129, 0.8)'; // emerald green
+                    if (item[0] === 'Leaf Blight') return 'rgba(245, 158, 11, 0.8)'; // amber
+                    if (item[0] === 'ESCA') return 'rgba(239, 68, 68, 0.8)'; // rose red
+                    return 'rgba(99, 102, 241, 0.8)'; // indigo for Black Rot
                 });
-            } else {
-                const foldBadge = document.createElement('span');
-                foldBadge.className = "px-2 py-0.5 bg-yellow-50 text-yellow-600 rounded-md border border-yellow-100 text-[10px] font-bold";
-                foldBadge.innerText = "Simulation Mode";
-                foldsContainer.appendChild(foldBadge);
-            }
 
-            // Badge Color and Text based on score
-            const badge = document.getElementById('result-badge');
-            if(data.confidence_score > 0.8) {
-                badge.className = "px-3 py-1 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100";
-                badge.innerText = "Sangat Yakin";
-            } else if(data.confidence_score > 0.7) {
-                badge.className = "px-3 py-1 text-[10px] font-bold rounded-full bg-blue-50 text-blue-600 border border-blue-100";
-                badge.innerText = "Yakin";
-            } else if(data.confidence_score >= 0.6) {
-                badge.className = "px-3 py-1 text-[10px] font-bold rounded-full bg-amber-50 text-amber-600 border border-amber-100";
-                badge.innerText = "Kurang Yakin";
-            } else {
-                badge.className = "px-3 py-1 text-[10px] font-bold rounded-full bg-red-50 text-red-600 border border-red-100";
-                badge.innerText = "Tidak Dikenal / Bukan Kategori Utama";
-            }
-
-            // Render ChartJS
-            const ctx = document.getElementById('probChart').getContext('2d');
-            const sorted = Object.entries(data.all_probs).sort((a,b) => b[1] - a[1]);
-            
-            if(chartInstance) chartInstance.destroy();
-            
-            // Safe, accessible corporate palette
-            const barColors = sorted.map(item => {
-                if (item[0] === 'Healthy') return 'rgba(16, 185, 129, 0.8)'; // emerald green
-                if (item[0] === 'Leaf Blight') return 'rgba(245, 158, 11, 0.8)'; // amber
-                if (item[0] === 'ESCA') return 'rgba(239, 68, 68, 0.8)'; // rose red
-                return 'rgba(99, 102, 241, 0.8)'; // indigo for Black Rot
-            });
-
-            chartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: sorted.map(x => x[0]),
-                    datasets: [{
-                        data: sorted.map(x => x[1] * 100),
-                        backgroundColor: barColors,
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: 'rgba(0, 0, 0, 0.05)'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: '#ffffff',
-                            titleColor: '#0f172a',
-                            bodyColor: '#475569',
-                            titleFont: { family: 'Plus Jakarta Sans', size: 11, weight: 'bold' },
-                            bodyFont: { family: 'Plus Jakarta Sans', size: 11 },
-                            borderColor: '#e2e8f0',
+                chartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: sorted.map(x => x[0]),
+                        datasets: [{
+                            data: sorted.map(x => x[1] * 100),
+                            backgroundColor: barColors,
+                            borderRadius: 8,
                             borderWidth: 1,
-                            callbacks: {
-                                label: function(context) {
-                                    return ` Probabilitas: ${context.raw.toFixed(1)}%`;
+                            borderColor: 'rgba(0, 0, 0, 0.05)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: '#ffffff',
+                                titleColor: '#0f172a',
+                                bodyColor: '#475569',
+                                titleFont: { family: 'Plus Jakarta Sans', size: 11, weight: 'bold' },
+                                bodyFont: { family: 'Plus Jakarta Sans', size: 11 },
+                                borderColor: '#e2e8f0',
+                                borderWidth: 1,
+                                callbacks: {
+                                    label: function(context) {
+                                        return ` Probabilitas: ${context.raw.toFixed(1)}%`;
+                                    }
                                 }
                             }
-                        }
-                    },
-                    scales: {
-                        y: { 
-                            beginAtZero: true, 
-                            max: 100,
-                            grid: { color: 'rgba(0, 0, 0, 0.03)' },
-                            ticks: { color: '#64748b', font: { family: 'Plus Jakarta Sans', size: 9 } }
                         },
-                        x: { 
-                            grid: { display: false },
-                            ticks: { color: '#334155', font: { family: 'Plus Jakarta Sans', size: 10, weight: '600' } }
+                        scales: {
+                            y: { 
+                                beginAtZero: true, 
+                                max: 100,
+                                grid: { color: 'rgba(0, 0, 0, 0.03)' },
+                                ticks: { color: '#64748b', font: { family: 'Plus Jakarta Sans', size: 9 } }
+                            },
+                            x: { 
+                                grid: { display: false },
+                                ticks: { color: '#334155', font: { family: 'Plus Jakarta Sans', size: 10, weight: '600' } }
+                            }
                         }
                     }
-                }
-            });
-
-            // Display result container
-            loadingState.classList.add('hidden');
-            resultContainer.classList.remove('hidden');
+                });
+            }
         }
         async function checkModelStatus() {
             const statusContainer = document.getElementById('system-status-container');

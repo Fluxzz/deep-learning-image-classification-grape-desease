@@ -1,0 +1,32 @@
+# Ignore python virtual environments
+.venv/
+.venv-1/
+venv/
+env/
+
+# Ignore local datasets and testing scripts
+ood_datasets/
+ood_datasets.zip
+*.zip
+ood_test_report.txt
+test_ood.py
+test_predict.py
+
+# Ignore git and GitHub configurations
+.git/
+.github/
+
+# Ignore IDE and System files
+.vscode/
+.idea/
+.gemini/
+.system_generated/
+*.log
+.DS_Store
+Thumbs.db
+
+# Ignore Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so

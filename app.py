@@ -24,6 +24,14 @@ NUM_CLASSES = len(CLASSES)
 OOD_THRESHOLD = 0.60
 LOW_CONFIDENCE_THRESHOLD = 0.70
 
+# Energy-based OOD Detection thresholds (Disabled to prevent false positives on real leaves)
+# Max logit dari gambar OOD (CIFAR-100) berkisar 0.4-3.8
+# Gambar daun anggur asli diharapkan menghasilkan max logit >> 5.0
+MAX_LOGIT_THRESHOLD = 0.0
+# Energy score: semakin tinggi (mendekati 0) = semakin OOD
+# OOD range: -3.8 s/d -1.6 | ID diharapkan: < -5.0
+ENERGY_THRESHOLD = 0.0
+
 # Image transform pipeline (MobileViT input: 224x224)
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -196,6 +204,33 @@ def validate_upload_file(file):
     return image_bytes
 
 
+def is_plant_by_color(image, min_plant_pct=0.05):
+    """
+    Checks if the image has a minimum percentage of plant-like colors (green, yellow, brown).
+    """
+    # Resize image to speed up color analysis
+    img_small = image.resize((100, 100))
+    hsv_img = img_small.convert('HSV')
+    hsv_np = np.array(hsv_img)
+    
+    h = hsv_np[:, :, 0]
+    s = hsv_np[:, :, 1]
+    v = hsv_np[:, :, 2]
+    
+    # PIL Hue: 0-255 (maps to 0-360 degrees)
+    # Saturation & Value: 0-255
+    # Green: 25 to 75 (approx 35 to 105 degrees)
+    # Yellow/Brown: 8 to 25 (approx 11 to 35 degrees)
+    # Require Saturation & Value >= 30 to avoid neutral background colors
+    green_mask = (h >= 25) & (h <= 75) & (s >= 30) & (v >= 30)
+    yellow_brown_mask = (h >= 8) & (h < 25) & (s >= 30) & (v >= 30)
+    
+    plant_mask = green_mask | yellow_brown_mask
+    plant_pct = np.sum(plant_mask) / h.size
+    
+    return bool(plant_pct >= min_plant_pct), float(plant_pct)
+
+
 @app.route('/predict', methods=['POST'])
 def predict():
     if 'file' not in request.files:
@@ -207,6 +242,9 @@ def predict():
         image_bytes = validate_upload_file(file)
         image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
         
+        # Color-based botanical check
+        is_plant_leaf, plant_pct = is_plant_by_color(image)
+        
         start_time = time.time()
         
         # Active folds used in prediction
@@ -216,18 +254,30 @@ def predict():
             # Prepare tensor
             input_tensor = transform(image).unsqueeze(0).to(device)
             
-            # Average probabilities across all fold models (Soft Voting Ensemble)
-            outputs_sum = None
+            # Collect per-fold logits and probabilities for ensemble + OOD analysis
+            all_fold_logits = []
+            all_fold_probs = []
             with torch.no_grad():
                 for fold_name, fold_model in models.items():
                     logits = fold_model(input_tensor)
                     probs = torch.softmax(logits, dim=1)[0]
-                    if outputs_sum is None:
-                        outputs_sum = probs
-                    else:
-                        outputs_sum += probs
+                    all_fold_logits.append(logits[0])  # shape (NUM_CLASSES,)
+                    all_fold_probs.append(probs)
             
-            avg_probs = (outputs_sum / len(models)).cpu().numpy()
+            # Average probabilities (Soft Voting Ensemble)
+            avg_probs = torch.stack(all_fold_probs).mean(dim=0).cpu().numpy()
+            
+            # Average logits for energy-based OOD detection
+            avg_logits = torch.stack(all_fold_logits).mean(dim=0)
+            
+            # Energy score: E(x) = -logsumexp(logits)
+            # Lower (more negative) = more in-distribution
+            # Higher (closer to 0) = more OOD
+            energy_score = -torch.logsumexp(avg_logits, dim=0).item()
+            
+            # Max logit: magnitude of the strongest class activation
+            # Low max logit = model tidak mengenali pola apapun = OOD
+            max_logit_value = float(avg_logits.max().item())
             
             # Find class index with max probability
             pred_idx = int(avg_probs.argmax())
@@ -238,10 +288,27 @@ def predict():
             for i, p in enumerate(avg_probs):
                 class_label = CLASSES[i] if i < len(CLASSES) else f"Class {i}"
                 all_probs[class_label] = float(p)
-                
-            # Generate Grad-CAM++ using the first fold model
-            first_model = list(models.values())[0]
-            gradcam_b64 = generate_gradcam_plusplus(first_model, input_tensor, image, pred_idx)
+            
+            # ---- Multi-Signal OOD Detection ----
+            # OOD jika max logit terlalu rendah (model tidak mengenali pola)
+            # ATAU energy score terlalu tinggi (mendekati 0)
+            # ATAU confidence score terlalu rendah (di bawah OOD_THRESHOLD)
+            # ATAU deteksi warna menyatakan gambar bukan daun/tanaman
+            ood_by_energy = energy_score > ENERGY_THRESHOLD
+            ood_by_logit = max_logit_value < MAX_LOGIT_THRESHOLD
+            ood_by_confidence = confidence_score < OOD_THRESHOLD
+            ood_by_color = not is_plant_leaf
+            
+            # Gambar dianggap OOD jika salah satu sinyal deteksi menyatakan OOD
+            is_ood = ood_by_logit or ood_by_energy or ood_by_confidence or ood_by_color
+            is_low_confidence = (not is_ood) and confidence_score < LOW_CONFIDENCE_THRESHOLD
+            
+            # Generate Grad-CAM++ hanya jika BUKAN OOD (hemat waktu komputasi)
+            if not is_ood:
+                first_model = list(models.values())[0]
+                gradcam_b64 = generate_gradcam_plusplus(first_model, input_tensor, image, pred_idx)
+            else:
+                gradcam_b64 = None
             
         else:
             # Simulation Mode
@@ -256,14 +323,18 @@ def predict():
             # Simulation mode intentionally avoids claiming real Grad-CAM output.
             gradcam_b64 = None
             
-        # Determine OOD and prediction class consistently across both modes
-        is_ood = confidence_score < OOD_THRESHOLD
-        is_low_confidence = confidence_score < LOW_CONFIDENCE_THRESHOLD
+        # Determine OOD for simulation mode (fallback to confidence or color check)
+        if not model_loaded:
+            is_ood = (confidence_score < OOD_THRESHOLD) or (not is_plant_leaf)
+            is_low_confidence = (not is_ood) and confidence_score < LOW_CONFIDENCE_THRESHOLD
+        # is_ood and is_low_confidence already set above for model_loaded mode
+        
         pred_class = 'Citra Tidak Dikenal' if is_ood else (CLASSES[pred_idx] if pred_idx < len(CLASSES) else f"Class {pred_idx}")
         
         inference_time = (time.time() - start_time) * 1000
         
-        return jsonify({
+        # Build response
+        response_data = {
             "success": True,
             "class": pred_class,
             "confidence": f"{confidence_score * 100:.1f}%",
@@ -275,7 +346,21 @@ def predict():
             "simulated": not model_loaded,
             "is_ood": is_ood,
             "is_low_confidence": is_low_confidence
-        })
+        }
+        
+        # Tambahkan detail OOD metrics (untuk debugging dan reporting)
+        if model_loaded:
+            response_data["ood_details"] = {
+                "energy_score": energy_score,
+                "max_logit": max_logit_value,
+                "energy_threshold": ENERGY_THRESHOLD,
+                "max_logit_threshold": MAX_LOGIT_THRESHOLD,
+                "ood_by_energy": ood_by_energy,
+                "ood_by_logit": ood_by_logit,
+                "ood_by_confidence": ood_by_confidence
+            }
+        
+        return jsonify(response_data)
         
     except ValueError as ve:
         return jsonify({"success": False, "error": str(ve)}), 400
